@@ -24,8 +24,8 @@ SOFTWARE.
 -->
 
 <plugin xmlns="http://apache.org/cordova/ns/plugins/1.0"
-           id="cordova-plugin-certificates"
-      version="0.6.4">
+        id="cordova-plugin-certificates"
+        version="0.6.4">
 
     <name>Certificate Plugin</name>
     <description>
@@ -38,8 +38,8 @@ SOFTWARE.
     <issue>https://github.com/hypery2k/cordova-certificate-plugin/issues</issue>
 
     <engines>
-      <engine name="cordova-android" version=">=4.1.0" />
-      <engine name="cordova-ios" version=">=3.4.0" />
+        <engine name="cordova-android" version=">=4.1.0" />
+        <engine name="cordova-ios" version=">=3.4.0" />
     </engines>
 
     <js-module src="www/certificate.js" name="Certificates">
@@ -49,21 +49,21 @@ SOFTWARE.
     <!-- ios -->
     <platform name="ios">
         <config-file target="config.xml" parent="/*">
-    		<feature name="CDVCertificate">
-    			<param name="ios-package" value="CDVCertificate"/>
-    		</feature>
+            <feature name="CDVCertificate">
+                <param name="ios-package" value="CDVCertificate"/>
+            </feature>
         </config-file>
 
-		<header-file src="src/ios/CDVCertificate.h" />
-		<source-file src="src/ios/CDVCertificate.m" />
+        <header-file src="src/ios/CDVCertificate.h" />
+        <source-file src="src/ios/CDVCertificate.m" />
 
-		<header-file src="src/ios/NSURLRequest+AllowUntrustedCertificates.h" />
-		<source-file src="src/ios/NSURLRequest+AllowUntrustedCertificates.m" />
+        <header-file src="src/ios/NSURLRequest+AllowUntrustedCertificates.h" />
+        <source-file src="src/ios/NSURLRequest+AllowUntrustedCertificates.m" />
     </platform>
 
     <!-- android -->
     <platform name="android">
-        <config-file target="res/xml/config.xml" parent="/*">            
+        <config-file target="res/xml/config.xml" parent="/*">
             <feature name="CertificatesPlugin" >
                 <param name="android-package" value="de.martinreinhardt.cordova.plugins.CertificatesPlugin"/>
             </feature>
@@ -73,4 +73,10 @@ SOFTWARE.
         <source-file src="src/android/de/martinreinhardt/cordova/plugins/CertificatesPlugin.java" target-dir="src/de/martinreinhardt/cordova/plugins/" />
     </platform>
 
+    <!-- windows -->
+    <platform name="windows">
+        <js-module src="src/windows/XmlHttpRequestProxy.js" name="XmlHttpRequestProxy">
+            <clobbers target="XmlHttpRequest" />
+        </js-module>
+    </platform>
 </plugin>

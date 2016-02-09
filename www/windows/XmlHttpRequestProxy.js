@@ -117,14 +117,17 @@ XmlHttpRequestProxy.prototype = {
             this.xmlHttpRequest.open(bstrMethod, bstrUrl, varAsync, bstrUser, bstrPassword);
 
         } else {
-            // create httpclient for remote requests
             this.isLocal = false;
+
+            // setup filters for ignoring SSL errors
             this.httpBaseProtocolFilter = new Windows.Web.Http.Filters.HttpBaseProtocolFilter();
             this.httpBaseProtocolFilter.ignorableServerCertificateErrors.append(Windows.Security.Cryptography.Certificates.ChainValidationResult.untrusted);
             this.httpBaseProtocolFilter.ignorableServerCertificateErrors.append(Windows.Security.Cryptography.Certificates.ChainValidationResult.expired);
             this.httpBaseProtocolFilter.ignorableServerCertificateErrors.append(Windows.Security.Cryptography.Certificates.ChainValidationResult.incompleteChain);
             this.httpBaseProtocolFilter.ignorableServerCertificateErrors.append(Windows.Security.Cryptography.Certificates.ChainValidationResult.wrongUsage);
             this.httpBaseProtocolFilter.ignorableServerCertificateErrors.append(Windows.Security.Cryptography.Certificates.ChainValidationResult.invalidName);
+
+            // create httpclient for remote requests
             if (XmlHttpRequestProxy.allowInsecure) {
                 this.httpClient = new Windows.Web.Http.HttpClient(this.httpBaseProtocolFilter);
             } else {
@@ -132,7 +135,7 @@ XmlHttpRequestProxy.prototype = {
             }
 
             // remember request parameters
-            this.method = bstrMethod;
+            this.method = bstrMethod.toLowerCase();
             this.uri = new Windows.Foundation.Uri(window.location.href, bstrUrl);
             this.async = varAsync;
         }
@@ -143,63 +146,42 @@ XmlHttpRequestProxy.prototype = {
         if (this.isLocal) {
             this.xmlHttpRequest.send.apply(this.xmlHttpRequest, arguments);
         } else {
+            // prepare HTTP Method & Request Message
+            this.httpMethod = Windows.Web.Http.HttpMethod[this.method];
+            this.httpRequestMessage = new Windows.Web.Http.HttpRequestMessage(this.httpMethod, this.uri);
 
-            if (this.method === 'GET') {
-                this.httpClient.getStringAsync(this.uri).done(this.bind(this, function (response) {
-                    this.readyState = this.states.HEADERS_RECEIVED;
-                    this.status = response.statusCode;
-                    this.statusText = response.reasonPhrase;
-                    response.content.readAsStringAsync().done(
-                            this.bind(this, function (content) {
-                                this.responseText = content;
-                                this.readyState = this.states.DONE;
-
-                                if (this.onload) {
-                                    this.onload();
-                                }
-                            }),
-                            this.bind(this, function (error) {
-                                if (this.onerror) {
-                                    this.onerror(error);
-                                }
-                            }));
-                }), this.bind(this, function (error) {
-                    if (this.onerror) {
-                        this.onerror(error);
-                    }
-                }));
-            } else {
-                // encode the data
-                var httpStringContent = new Windows.Web.Http.HttpStringContent(
+            // check if we need to add some data
+            if (data) {
+                this.httpRequestMessage.content = new Windows.Web.Http.HttpStringContent(
                         data,
                         Windows.Storage.Streams.UnicodeEncoding.utf8,
                         "application/json");
-
-                this.readyState = this.states.OPENED;
-                this.httpClient.postAsync(this.uri, httpStringContent).done(this.bind(this, function (response) {
-                    this.readyState = this.states.HEADERS_RECEIVED;
-                    this.status = response.statusCode;
-                    this.statusText = response.reasonPhrase;
-                    response.content.readAsStringAsync().done(
-                            this.bind(this, function (content) {
-                                this.responseText = content;
-                                this.readyState = this.states.DONE;
-
-                                if (this.onload) {
-                                    this.onload();
-                                }
-                            }),
-                            this.bind(this, function (error) {
-                                if (this.onerror) {
-                                    this.onerror(error);
-                                }
-                            }));
-                }), this.bind(this, function (error) {
-                    if (this.onerror) {
-                        this.onerror(error);
-                    }
-                }));
             }
+
+            // update ready state
+            this.readyState = this.states.OPENED;
+            this.executeCallback('onreadystatechange');
+
+            // finally send the request
+            this.httpClient.sendRequestAsync(this.httpRequestMessage).done(this.bind(this, function (response) {
+                this.readyState = this.states.HEADERS_RECEIVED;
+                this.executeCallback('onreadystatechange');
+                this.status = response.statusCode;
+                this.statusText = response.reasonPhrase;
+                response.content.readAsStringAsync().done(
+                        this.bind(this, function (content) {
+                            this.responseText = content;
+                            this.readyState = this.states.DONE;
+                            this.executeCallback('onreadystatechange');
+
+                            this.executeCallback('onload');
+                        }),
+                        this.bind(this, function (error) {
+                            this.executeCallback('onerror', [error]);
+                        }));
+            }), this.bind(this, function (error) {
+                this.executeCallback('onerror', [error]);
+            }));
         }
     },
     setRequestHeader: function () {
@@ -213,6 +195,8 @@ XmlHttpRequestProxy.prototype = {
     },
     // internal variables
     httpClient: null,
+    httpMethod: null,
+    httpRequestMessage: null,
     xmlHttpRequest: null,
     method: 'GET',
     uri: null,
@@ -231,10 +215,20 @@ XmlHttpRequestProxy.prototype = {
      */
     forwardCallback: function (name) {
         this.xmlHttpRequest[name] = this.bind(this, function () {
-            if (this[name]) {
-                this[name].apply(this, arguments);
-            }
+            this.executeCallback(name, arguments);
         });
+    },
+    /**
+     * Helper function for executing a callback, runs it asynchronous
+     * @param string name
+     * @param array arguments
+     */
+    executeCallback: function (name, callback_arguments) {
+        setTimeout(this.bind(this, function () {
+            if (this[name]) {
+                this[name].apply(this, callback_arguments);
+            }
+        }), 0);
     }
 };
 

@@ -75,8 +75,11 @@ SOFTWARE.
 
     <!-- windows -->
     <platform name="windows">
-        <js-module src="src/windows/XmlHttpRequestProxy.js" name="XmlHttpRequestProxy">
+        <js-module src="www/windows/XmlHttpRequestProxy.js" name="XmlHttpRequestProxy">
             <clobbers target="XmlHttpRequest" />
+        </js-module>
+        <js-module src="src/windows/CertificatesPlugin.js" name="CertificatesPlugin">
+            <merges target="" />
         </js-module>
     </platform>
 </plugin>

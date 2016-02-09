@@ -2,7 +2,7 @@
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2014 Martin Reinhardt
+ * Copyright (c) 2016 Wolfgang Koller
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,27 +24,14 @@
  *
  */
 
+/*global Windows, WinJS*/
 
-var Certificate = function () {
+var cordova = require('cordova');
 
-};
-
-Certificate.prototype = {
-    /**
-     * Activates or deactivates the acceptance of self signed/unsecure SSL certificates
-     *
-     * @param {Function} boolActivateUnsecure
-     *      boolean value to set desired behaviour
-     */
-    trustUnsecureCerts: function (boolActivateUnsecure) {
-        if (cordova.platformId == 'android' || cordova.platformId == 'windows') {
-            cordova.exec(null, null, 'CertificatesPlugin', 'setUntrusted', [boolActivateUnsecure]);
-        } else {
-            cordova.exec(null, null, 'CDVCertificate', 'setUntrusted', [boolActivateUnsecure]);
-        }
+module.exports = {
+    setUntrusted: function (success, error, args) {
+        window.XMLHttpRequest.allowInsecure = args[0];
     }
 };
 
-var plugin = new Certificate();
-
-module.exports = plugin;
+require("cordova/exec/proxy").add("CertificatesPlugin", module.exports);

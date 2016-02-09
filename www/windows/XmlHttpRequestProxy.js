@@ -26,6 +26,11 @@
 
 var XmlHttpRequestProxy = function () {};
 
+/**
+ * Global indicator for allowing / disallowing insecure requests
+ */
+XmlHttpRequestProxy.allowInsecure = false;
+
 XmlHttpRequestProxy.prototype = {
     // original XMLHttpRequest implementation
     delegate: window.XMLHttpRequest,
@@ -114,7 +119,17 @@ XmlHttpRequestProxy.prototype = {
         } else {
             // create httpclient for remote requests
             this.isLocal = false;
-            this.httpClient = new Windows.Web.Http.HttpClient();
+            this.httpBaseProtocolFilter = new Windows.Web.Http.Filters.HttpBaseProtocolFilter();
+            this.httpBaseProtocolFilter.ignorableServerCertificateErrors.append(Windows.Security.Cryptography.Certificates.ChainValidationResult.untrusted);
+            this.httpBaseProtocolFilter.ignorableServerCertificateErrors.append(Windows.Security.Cryptography.Certificates.ChainValidationResult.expired);
+            this.httpBaseProtocolFilter.ignorableServerCertificateErrors.append(Windows.Security.Cryptography.Certificates.ChainValidationResult.incompleteChain);
+            this.httpBaseProtocolFilter.ignorableServerCertificateErrors.append(Windows.Security.Cryptography.Certificates.ChainValidationResult.wrongUsage);
+            this.httpBaseProtocolFilter.ignorableServerCertificateErrors.append(Windows.Security.Cryptography.Certificates.ChainValidationResult.invalidName);
+            if (XmlHttpRequestProxy.allowInsecure) {
+                this.httpClient = new Windows.Web.Http.HttpClient(this.httpBaseProtocolFilter);
+            } else {
+                this.httpClient = new Windows.Web.Http.HttpClient();
+            }
 
             // remember request parameters
             this.method = bstrMethod;
@@ -131,24 +146,57 @@ XmlHttpRequestProxy.prototype = {
 
             if (this.method === 'GET') {
                 this.httpClient.getStringAsync(this.uri).done(this.bind(this, function (response) {
-                    console.log('XmlHttpRequestProxy - send - get - done');
-                    this.status = 200;
-                    this.statusText = "";
-                    this.response = response;
+                    this.readyState = this.states.HEADERS_RECEIVED;
+                    this.status = response.statusCode;
+                    this.statusText = response.reasonPhrase;
+                    response.content.readAsStringAsync().done(
+                            this.bind(this, function (content) {
+                                this.responseText = content;
+                                this.readyState = this.states.DONE;
 
-                    if (this.onload) {
-                        this.onload();
+                                if (this.onload) {
+                                    this.onload();
+                                }
+                            }),
+                            this.bind(this, function (error) {
+                                if (this.onerror) {
+                                    this.onerror(error);
+                                }
+                            }));
+                }), this.bind(this, function (error) {
+                    if (this.onerror) {
+                        this.onerror(error);
                     }
                 }));
             } else {
-                this.httpClient.postAsync(this.uri, data).done(this.bind(this, function (response) {
-                    console.log('XmlHttpRequestProxy - send - post - done');
-                    this.status = 200;
-                    this.statusText = "";
-                    this.response = response;
+                // encode the data
+                var httpStringContent = new Windows.Web.Http.HttpStringContent(
+                        data,
+                        Windows.Storage.Streams.UnicodeEncoding.utf8,
+                        "application/json");
 
-                    if (this.onload) {
-                        this.onload();
+                this.readyState = this.states.OPENED;
+                this.httpClient.postAsync(this.uri, httpStringContent).done(this.bind(this, function (response) {
+                    this.readyState = this.states.HEADERS_RECEIVED;
+                    this.status = response.statusCode;
+                    this.statusText = response.reasonPhrase;
+                    response.content.readAsStringAsync().done(
+                            this.bind(this, function (content) {
+                                this.responseText = content;
+                                this.readyState = this.states.DONE;
+
+                                if (this.onload) {
+                                    this.onload();
+                                }
+                            }),
+                            this.bind(this, function (error) {
+                                if (this.onerror) {
+                                    this.onerror(error);
+                                }
+                            }));
+                }), this.bind(this, function (error) {
+                    if (this.onerror) {
+                        this.onerror(error);
                     }
                 }));
             }
@@ -170,6 +218,7 @@ XmlHttpRequestProxy.prototype = {
     uri: null,
     async: true,
     isLocal: false,
+    httpBaseProtocolFilter: null,
     // helper functions
     bind: function (context, func) {
         return function () {

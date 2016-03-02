@@ -70,18 +70,28 @@ XmlHttpRequestProxy.prototype = {
         console.log('XmlHttpRequestProxy - getAllResponseHeaders');
 
         if (this.isLocal) {
-            this.xmlHttpRequest.getAllResponseHeaders.apply(this.xmlHttpRequest, arguments);
+            return this.xmlHttpRequest.getAllResponseHeaders.apply(this.xmlHttpRequest, arguments);
         } else {
+            var headers = "";
+            var iIterator = this.httpResponseMessage.headers.first();
 
+            while (iIterator.hasCurrent) {
+                var current = iIterator.current;
+                headers += current.key + ": " + current.value + "\r\n";
+
+                iIterator.moveNext();
+            }
+
+            return headers;
         }
     },
-    getResponseHeader: function () {
+    getResponseHeader: function (header) {
         console.log('XmlHttpRequestProxy - getResponseHeader');
 
         if (this.isLocal) {
-            this.xmlHttpRequest.getResponseHeader.apply(this.xmlHttpRequest, arguments);
+            return this.xmlHttpRequest.getResponseHeader.apply(this.xmlHttpRequest, arguments);
         } else {
-
+            return this.httpResponseMessage.headers.lookup(header);
         }
     },
     open: function (bstrMethod, bstrUrl, varAsync, bstrUser, bstrPassword) {
@@ -138,6 +148,9 @@ XmlHttpRequestProxy.prototype = {
             this.method = bstrMethod.toLowerCase();
             this.uri = new Windows.Foundation.Uri(window.location.href, bstrUrl);
             this.async = varAsync;
+            // prepare HTTP Method & Request Message
+            this.httpMethod = Windows.Web.Http.HttpMethod[this.method];
+            this.httpRequestMessage = new Windows.Web.Http.HttpRequestMessage(this.httpMethod, this.uri);
         }
     },
     send: function (data) {
@@ -146,16 +159,12 @@ XmlHttpRequestProxy.prototype = {
         if (this.isLocal) {
             this.xmlHttpRequest.send.apply(this.xmlHttpRequest, arguments);
         } else {
-            // prepare HTTP Method & Request Message
-            this.httpMethod = Windows.Web.Http.HttpMethod[this.method];
-            this.httpRequestMessage = new Windows.Web.Http.HttpRequestMessage(this.httpMethod, this.uri);
-
             // check if we need to add some data
             if (data) {
                 this.httpRequestMessage.content = new Windows.Web.Http.HttpStringContent(
                         data,
                         Windows.Storage.Streams.UnicodeEncoding.utf8,
-                        "application/json");
+                        this.contentType);
             }
 
             // update ready state
@@ -164,11 +173,12 @@ XmlHttpRequestProxy.prototype = {
 
             // finally send the request
             this.httpClient.sendRequestAsync(this.httpRequestMessage).done(this.bind(this, function (response) {
+                this.httpResponseMessage = response;
                 this.readyState = this.states.HEADERS_RECEIVED;
                 this.executeCallback('onreadystatechange');
-                this.status = response.statusCode;
-                this.statusText = response.reasonPhrase;
-                response.content.readAsStringAsync().done(
+                this.status = this.httpResponseMessage.statusCode;
+                this.statusText = this.httpResponseMessage.reasonPhrase;
+                this.httpResponseMessage.content.readAsStringAsync().done(
                         this.bind(this, function (content) {
                             this.responseText = content;
                             this.readyState = this.states.DONE;
@@ -184,25 +194,33 @@ XmlHttpRequestProxy.prototype = {
             }));
         }
     },
-    setRequestHeader: function () {
+    setRequestHeader: function (header, value) {
         console.log('XmlHttpRequestProxy - setRequestHeader');
 
         if (this.isLocal) {
             this.xmlHttpRequest.setRequestHeader.apply(this.xmlHttpRequest, arguments);
         } else {
+            this.httpRequestMessage.headers.tryAppendWithoutValidation(header, value);
 
+            // remember content-type for data encoding
+            if (header === this.contentTypeHeader) {
+                this.contentType = value;
+            }
         }
     },
     // internal variables
     httpClient: null,
     httpMethod: null,
     httpRequestMessage: null,
+    httpResponseMessage: null,
+    httpBaseProtocolFilter: null,
     xmlHttpRequest: null,
     method: 'GET',
     uri: null,
     async: true,
     isLocal: false,
-    httpBaseProtocolFilter: null,
+    contentTypeHeader: "Content-Type",
+    contentType: "text/plain",
     // helper functions
     bind: function (context, func) {
         return function () {
